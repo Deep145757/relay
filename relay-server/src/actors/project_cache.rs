@@ -934,10 +934,9 @@ mod tests {
     use std::time::Duration;
 
     use relay_test::mock_service;
-    use uuid::Uuid;
 
     use crate::actors::project::ExpiryState;
-    use crate::testutils::empty_envelope;
+    use crate::testutils::{empty_envelope, TempDirGuard};
 
     use super::*;
 
@@ -1008,6 +1007,7 @@ mod tests {
 
     #[tokio::test]
     async fn always_spools() {
+        let _guard = TempDirGuard::new();
         let num_permits = 5;
         let buffer_guard: Arc<_> = BufferGuard::new(num_permits).into();
         let services = mocked_services();
@@ -1016,7 +1016,7 @@ mod tests {
         let config = Config::from_json_value(serde_json::json!({
             "spool": {
                 "envelopes": {
-                    "path": std::env::temp_dir().join(Uuid::new_v4().to_string()),
+                    "path": "spool.db",
                     "max_memory_size": 0, // 0 bytes, to force to spool to disk all the envelopes.
                 }
             }

@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use bytes::Bytes;
 use relay_event_schema::protocol::EventId;
 use relay_protocol::RuleCondition;
@@ -5,6 +7,7 @@ use relay_sampling::config::{
     DecayingFunction, RuleId, RuleType, SamplingMode, SamplingRule, SamplingValue,
 };
 use relay_sampling::{DynamicSamplingContext, SamplingConfig};
+use uuid::Uuid;
 
 use crate::actors::project::ProjectState;
 use crate::envelope::{Envelope, Item, ItemType};
@@ -100,4 +103,39 @@ pub fn empty_envelope() -> Box<Envelope> {
         .unwrap();
 
     Envelope::from_request(Some(EventId::new()), RequestMeta::new(dsn))
+}
+
+/// A helper that creates, uses and removes a temporary directory.
+pub struct TempDirGuard {
+    path: PathBuf,
+    previous_path: PathBuf,
+}
+
+impl TempDirGuard {
+    /// Creates a new temporary directory and changes into it.
+    ///
+    /// When the guard is `dropped`, the current working directory is switched back to the old one,
+    /// and the temporary directory is removed, including any files contained in it.
+    pub fn new() -> Self {
+        let previous_path = std::env::current_dir().unwrap();
+        let path = std::env::temp_dir().join(Uuid::new_v4().to_string());
+        std::fs::create_dir(&path).unwrap();
+        std::env::set_current_dir(&path).unwrap();
+        Self {
+            path,
+            previous_path,
+        }
+    }
+
+    /// Returns the path of the temporary directory.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempDirGuard {
+    fn drop(&mut self) {
+        std::env::set_current_dir(&self.previous_path).unwrap();
+        std::fs::remove_dir_all(&self.path).unwrap();
+    }
 }
