@@ -1026,8 +1026,35 @@ mod tests {
         assert!(target_dir.exists());
     }
 
+    /// A helper that creates, uses and removes a temporary directory.
+    struct TempDirGuard {
+        path: PathBuf,
+        previous_path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new() -> Self {
+            let previous_path = std::env::current_dir().unwrap();
+            let path = std::env::temp_dir().join(Uuid::new_v4().to_string());
+            std::fs::create_dir(&path).unwrap();
+            std::env::set_current_dir(&path).unwrap();
+            Self {
+                path,
+                previous_path,
+            }
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.previous_path).unwrap();
+            std::fs::remove_dir_all(&self.path).unwrap();
+        }
+    }
+
     #[tokio::test]
     async fn create_spool_directory_root_path() {
+        let _guard = TempDirGuard::new();
         let spool_file = "spool.db";
         let buffer_guard: Arc<_> = BufferGuard::new(1).into();
         let config: Arc<_> = Config::from_json_value(serde_json::json!({
