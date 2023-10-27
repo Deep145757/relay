@@ -970,7 +970,6 @@ impl Drop for BufferService {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use std::time::{Duration, Instant};
 
     use insta::assert_debug_snapshot;
@@ -1028,8 +1027,8 @@ mod tests {
 
     #[tokio::test]
     async fn create_spool_directory_root_path() {
-        let _temp_dir = TempDirGuard::new();
-        let spool_file = "spool.db";
+        let temp_dir = TempDirGuard::new();
+        let spool_file = temp_dir.path().join("spool.db");
         let buffer_guard: Arc<_> = BufferGuard::new(1).into();
         let config: Arc<_> = Config::from_json_value(serde_json::json!({
             "spool": {
@@ -1043,18 +1042,17 @@ mod tests {
         BufferService::create(buffer_guard, services(), config)
             .await
             .unwrap();
-        let spool_file = PathBuf::from(spool_file);
         assert!(spool_file.exists());
     }
 
     #[tokio::test]
     async fn ensure_start_time_restore() {
-        let _temp_dir = TempDirGuard::new();
+        let temp_dir = TempDirGuard::new();
         let buffer_guard: Arc<_> = BufferGuard::new(10).into();
         let config: Arc<_> = Config::from_json_value(serde_json::json!({
             "spool": {
                 "envelopes": {
-                    "path": "spool.db",
+                    "path": temp_dir.path().join("spool.db"),
                     "max_memory_size": 0, // 0 bytes, to force to spool to disk all the envelopes.
                 }
             }
@@ -1107,14 +1105,14 @@ mod tests {
 
     #[tokio::test]
     async fn dequeue_waits_for_permits() {
-        let _temp_dir = TempDirGuard::new();
+        let temp_dir = TempDirGuard::new();
         relay_test::setup();
         let num_permits = 3;
         let buffer_guard: Arc<_> = BufferGuard::new(num_permits).into();
         let config: Arc<_> = Config::from_json_value(serde_json::json!({
             "spool": {
                 "envelopes": {
-                    "path": "spool.db",
+                    "path": temp_dir.path().join("spool.db"),
                     "max_memory_size": 0, // 0 bytes, to force to spool to disk all the envelopes.
                 }
             }
@@ -1201,12 +1199,12 @@ mod tests {
 
     #[test]
     fn metrics_work() {
-        let _temp_dir = TempDirGuard::new();
+        let temp_dir = TempDirGuard::new();
         let buffer_guard: Arc<_> = BufferGuard::new(999999).into();
         let config: Arc<_> = Config::from_json_value(serde_json::json!({
             "spool": {
                 "envelopes": {
-                    "path": "spool.db",
+                    "path": temp_dir.path().join("spool.db"),
                     "max_memory_size": "4KB",
                     "max_disk_size": "20KB",
                 }

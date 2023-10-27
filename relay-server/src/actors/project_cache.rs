@@ -1007,7 +1007,7 @@ mod tests {
 
     #[tokio::test]
     async fn always_spools() {
-        let _guard = TempDirGuard::new();
+        let temp_dir = TempDirGuard::new();
         let num_permits = 5;
         let buffer_guard: Arc<_> = BufferGuard::new(num_permits).into();
         let services = mocked_services();
@@ -1016,7 +1016,7 @@ mod tests {
         let config = Config::from_json_value(serde_json::json!({
             "spool": {
                 "envelopes": {
-                    "path": "spool.db",
+                    "path": temp_dir.path().join("spool.db"),
                     "max_memory_size": 0, // 0 bytes, to force to spool to disk all the envelopes.
                 }
             }
