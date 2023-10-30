@@ -129,6 +129,7 @@ impl TempDirGuard {
 
 impl Drop for TempDirGuard {
     fn drop(&mut self) {
+        relay_log::trace!("Removing {:?}", self.path);
         std::fs::remove_dir_all(&self.path).unwrap();
     }
 }
