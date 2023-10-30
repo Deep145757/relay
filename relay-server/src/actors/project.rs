@@ -595,7 +595,8 @@ impl Project {
                 MetricNamespace::Sessions => true,
                 MetricNamespace::Transactions => true,
                 MetricNamespace::Spans => state.has_feature(Feature::SpanMetricsExtraction),
-                MetricNamespace::Custom => state.has_feature(Feature::CustomMetrics),
+                // TODO MetricNamespace::Custom => state.has_feature(Feature::CustomMetrics),
+                MetricNamespace::Custom => true,
                 MetricNamespace::Unsupported => false,
             };
 
@@ -930,12 +931,7 @@ impl Project {
         })
     }
 
-    pub fn flush_buckets(
-        &mut self,
-        services: Services,
-        partition_key: Option<u64>,
-        mut buckets: Vec<Bucket>,
-    ) {
+    pub fn flush_buckets(&mut self, services: Services, mut buckets: Vec<Bucket>) {
         let Services {
             aggregator,
             envelope_manager,
@@ -992,10 +988,7 @@ impl Project {
                 #[cfg(feature = "processing")]
                 if !was_rate_limited && config.processing_enabled() {
                     // If there were no cached rate limits active, let the processor check redis:
-                    envelope_processor.send(RateLimitFlushBuckets {
-                        bucket_limiter,
-                        partition_key,
-                    });
+                    envelope_processor.send(RateLimitFlushBuckets { bucket_limiter });
 
                     return;
                 }
@@ -1006,11 +999,7 @@ impl Project {
         };
 
         if !buckets.is_empty() {
-            envelope_manager.send(SendMetrics {
-                buckets,
-                scoping,
-                partition_key,
-            });
+            envelope_manager.send(SendMetrics { buckets, scoping });
         }
     }
 }

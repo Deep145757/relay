@@ -774,7 +774,7 @@ impl ProjectCacheBroker {
     fn handle_flush_buckets(&mut self, message: FlushBuckets) {
         let context = self.services.clone();
         self.get_or_create_project(message.project_key)
-            .flush_buckets(context, message.partition_key, message.buckets);
+            .flush_buckets(context, message.buckets);
     }
 
     fn handle_buffer_index(&mut self, message: UpdateBufferIndex) {

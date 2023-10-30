@@ -75,9 +75,11 @@ mod aggregatorservice;
 mod bucket;
 mod protocol;
 mod router;
+mod split;
 mod statsd;
 
 pub use aggregatorservice::*;
 pub use bucket::*;
 pub use protocol::*;
 pub use router::*;
+pub use split::*;

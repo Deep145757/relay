@@ -8,7 +8,8 @@ use chrono::Utc;
 use relay_base_schema::project::ProjectKey;
 use relay_config::{Config, HttpEncoding};
 use relay_event_schema::protocol::ClientReport;
-use relay_metrics::{Aggregator, Bucket, MergeBuckets};
+use relay_metrics::aggregator::Aggregator as TodoAggregator;
+use relay_metrics::{split_by, Aggregator, Bucket, MergeBuckets};
 use relay_quotas::Scoping;
 use relay_statsd::metric;
 use relay_system::{Addr, FromMessage, NoResponse};
@@ -147,8 +148,6 @@ pub struct SendMetrics {
     pub buckets: Vec<Bucket>,
     /// Scoping information for the metrics.
     pub scoping: Scoping,
-    /// The key of the logical partition to send the metrics to.
-    pub partition_key: Option<u64>,
 }
 
 /// Dispatch service for generating and submitting Envelopes.
@@ -328,11 +327,7 @@ impl EnvelopeManagerService {
     }
 
     async fn handle_send_metrics(&self, message: SendMetrics) {
-        let SendMetrics {
-            buckets,
-            scoping,
-            partition_key,
-        } = message;
+        let SendMetrics { buckets, scoping } = message;
 
         let upstream = self.config.upstream_descriptor();
         let dsn = PartialDsn {
@@ -344,20 +339,29 @@ impl EnvelopeManagerService {
             project_id: Some(scoping.project_id),
         };
 
-        let mut item = Item::new(ItemType::MetricBuckets);
-        item.set_payload(ContentType::Json, serde_json::to_vec(&buckets).unwrap());
-        let mut envelope = Envelope::from_request(None, RequestMeta::outbound(dsn));
-        envelope.add_item(item);
+        relay_log::info!("send metrics {dsn:?} {buckets:?}");
 
-        let partition_key = partition_key.map(|x| x.to_string());
-        let result = self.submit_envelope(envelope, scoping, partition_key).await;
-        if let Err(err) = result {
-            relay_log::trace!(
-                error = &err as &dyn Error,
-                "failed to submit the envelope, merging buckets back",
-            );
-            self.aggregator
-                .send(MergeBuckets::new(scoping.project_key, buckets));
+        let partitioned_buckets = TodoAggregator::partition_buckets(buckets, None);
+        for (partition_key, buckets) in partitioned_buckets {
+            relay_log::info!("{partition_key:?} {buckets:?}");
+            for batch in split_by(&buckets, 200) {
+                relay_log::info!("--> {}", serde_json::to_string(&batch).unwrap());
+                let mut item = Item::new(ItemType::MetricBuckets);
+                item.set_payload(ContentType::Json, serde_json::to_vec(&batch).unwrap());
+                let mut envelope = Envelope::from_request(None, RequestMeta::outbound(dsn.clone()));
+                envelope.add_item(item);
+
+                let partition_key = partition_key.map(|k| k.to_string());
+                let result = self.submit_envelope(envelope, scoping, partition_key).await;
+                if let Err(err) = result {
+                    relay_log::trace!(
+                        error = &err as &dyn Error,
+                        "failed to submit the envelope, merging buckets back",
+                    );
+                    // self.aggregator
+                    //     .send(MergeBuckets::new(scoping.project_key, buckets));
+                }
+            }
         }
     }
 

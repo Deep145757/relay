@@ -482,7 +482,6 @@ impl EncodeEnvelope {
 #[derive(Debug)]
 pub struct RateLimitFlushBuckets {
     pub bucket_limiter: MetricsLimiter,
-    pub partition_key: Option<u64>,
 }
 
 /// CPU-intensive processing tasks for envelopes.
@@ -2896,10 +2895,7 @@ impl EnvelopeProcessorService {
     fn handle_rate_limit_flush_buckets(&self, message: RateLimitFlushBuckets) {
         use relay_quotas::ItemScoping;
 
-        let RateLimitFlushBuckets {
-            mut bucket_limiter,
-            partition_key,
-        } = message;
+        let RateLimitFlushBuckets { mut bucket_limiter } = message;
 
         let scoping = *bucket_limiter.scoping();
 
@@ -2937,11 +2933,9 @@ impl EnvelopeProcessorService {
         let buckets = bucket_limiter.into_metrics();
         if !buckets.is_empty() {
             // Forward buckets to envelope manager to send them to upstream or kafka:
-            self.inner.envelope_manager.send(SendMetrics {
-                buckets,
-                scoping,
-                partition_key,
-            });
+            self.inner
+                .envelope_manager
+                .send(SendMetrics { buckets, scoping });
         }
     }
 

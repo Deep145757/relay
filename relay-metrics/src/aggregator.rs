@@ -511,7 +511,7 @@ impl Aggregator {
     /// Pop and return the buckets that are eligible for flushing out according to bucket interval.
     ///
     /// Note that this function is primarily intended for tests.
-    pub fn pop_flush_buckets(&mut self, force: bool) -> HashMap<ProjectKey, Vec<HashedBucket>> {
+    pub fn pop_flush_buckets(&mut self, force: bool) -> HashMap<ProjectKey, Vec<Bucket>> {
         relay_statsd::metric!(
             gauge(MetricGauges::Buckets) = self.bucket_count() as u64,
             aggregator = &self.name,
@@ -524,7 +524,7 @@ impl Aggregator {
             aggregator = &self.name,
         );
 
-        let mut buckets = HashMap::<ProjectKey, Vec<HashedBucket>>::new();
+        let mut buckets = HashMap::<ProjectKey, Vec<Bucket>>::new();
         let mut stats = HashMap::new();
 
         relay_statsd::metric!(
@@ -554,13 +554,7 @@ impl Aggregator {
                             tags: key.tags.clone(),
                         };
 
-                        buckets
-                            .entry(key.project_key)
-                            .or_default()
-                            .push(HashedBucket {
-                                hashed_key: key.hash64(),
-                                bucket,
-                            });
+                        buckets.entry(key.project_key).or_default().push(bucket);
 
                         false
                     } else {
@@ -845,29 +839,29 @@ impl Aggregator {
 
     /// Split buckets into N logical partitions, determined by the bucket key.
     pub fn partition_buckets(
-        &self,
-        buckets: Vec<HashedBucket>,
+        buckets: Vec<Bucket>,
         flush_partitions: Option<u64>,
     ) -> BTreeMap<Option<u64>, Vec<Bucket>> {
         let flush_partitions = match flush_partitions {
             None => {
-                return BTreeMap::from([(None, buckets.into_iter().map(|x| x.bucket).collect())]);
+                return BTreeMap::from([(None, buckets.into_iter().collect())]);
             }
             Some(x) => x.max(1), // handle 0,
         };
         let mut partitions = BTreeMap::<_, Vec<Bucket>>::new();
         for bucket in buckets {
-            let partition_key = bucket.hashed_key % flush_partitions;
+            // TODO: hash bucket here
+            let partition_key = 0u64 % flush_partitions;
             partitions
                 .entry(Some(partition_key))
                 .or_default()
-                .push(bucket.bucket);
+                .push(bucket);
 
             // Log the distribution of buckets over partition key
-            relay_statsd::metric!(
-                histogram(MetricHistograms::PartitionKeys) = partition_key as f64,
-                aggregator = &self.name,
-            );
+            // relay_statsd::metric!(
+            //     histogram(MetricHistograms::PartitionKeys) = partition_key as f64,
+            //     aggregator = &self.name,
+            // );
         }
         partitions
     }
