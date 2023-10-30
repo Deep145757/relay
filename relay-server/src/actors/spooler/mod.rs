@@ -570,6 +570,10 @@ impl OnDisk {
             relay_statsd::metric!(gauge(RelayGauges::BufferEnvelopesDiskCount) = *count);
         }
     }
+
+    async fn close(&mut self) {
+        self.db.close().await;
+    }
 }
 
 /// The state which defines the [`BufferService`] behaviour.
@@ -915,6 +919,7 @@ impl BufferService {
 
         let buffer = std::mem::take(&mut ram.buffer);
         disk.spool(buffer).await?;
+        disk.close().await;
         Ok(())
     }
 }
@@ -1039,10 +1044,12 @@ mod tests {
         }))
         .unwrap()
         .into();
-        BufferService::create(buffer_guard, services(), config)
+        let mut service = BufferService::create(buffer_guard, services(), config)
             .await
             .unwrap();
         assert!(spool_file.exists());
+
+        service.handle_shutdown().await.unwrap();
     }
 
     #[tokio::test]
