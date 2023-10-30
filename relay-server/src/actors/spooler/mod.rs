@@ -571,6 +571,7 @@ impl OnDisk {
         }
     }
 
+    /// Drops the database connection.
     async fn close(&mut self) {
         self.db.close().await;
     }
@@ -899,12 +900,16 @@ impl BufferService {
     /// Tries to spool to disk if the current buffer state is `BufferState::MemoryDiskStandby`,
     /// which means we use the in-memory buffer active and disk still free or not used before.
     async fn handle_shutdown(&mut self) -> Result<(), BufferError> {
-        let BufferState::MemoryFileStandby {
-            ref mut ram,
-            ref mut disk,
-        } = self.state
-        else {
-            return Ok(());
+        let (ram, disk) = match self.state {
+            BufferState::MemoryFileStandby {
+                ref mut ram,
+                ref mut disk,
+            } => (ram, disk),
+            BufferState::Disk(disk) => {
+                disk.close().await;
+                return Ok(());
+            }
+            BufferState::Memory(_) => return Ok(()),
         };
 
         let count: usize = ram.count();
